@@ -72,6 +72,9 @@ public:
   ~WebServer();
   void begin();
   void handleClient();
+  void enableCORS(bool /*enabled*/) {
+    // Host responses already include Access-Control-Allow-Origin.
+  }
   void on(const char *uri, int method, std::function<void()> handler);
   void on(const char *uri, int method, std::function<void()> handler,
           std::function<void()> uploadHandler);
@@ -92,6 +95,7 @@ public:
   }
   void sendContent(const String &content);
   void sendContent(const char *content);
+  void sendContent(const char *content, size_t len);
   void setContentLength(size_t len);
   int method();
   String uri();

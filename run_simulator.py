@@ -31,6 +31,7 @@ import re
 
 RUN_SIMULATOR_TARGET_KEY = "_crosspoint_run_simulator_target_registered"
 RUN_SIMULATOR_TARGET_OWNER_OPTION = "custom_run_simulator_target_owner"
+SIMULATOR_HTTP_PORT_OPTION = "custom_simulator_http_port"
 
 
 # --- run_simulator custom target ---
@@ -39,7 +40,13 @@ def _run_simulator(source, target, env):
     import subprocess
 
     binary = env.subst("$BUILD_DIR/program")
-    subprocess.run([binary], cwd=os.getcwd())
+    runtime_env = os.environ.copy()
+    configured_http_port = env.GetProjectOption(
+        SIMULATOR_HTTP_PORT_OPTION, ""
+    ).strip()
+    if configured_http_port:
+        runtime_env["CROSSPOINT_SIM_HTTP_PORT"] = configured_http_port
+    subprocess.run([binary], cwd=os.getcwd(), env=runtime_env)
 
 
 target_owner = env.GetProjectOption(RUN_SIMULATOR_TARGET_OWNER_OPTION, "").strip().lower()

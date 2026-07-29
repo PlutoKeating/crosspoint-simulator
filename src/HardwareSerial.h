@@ -33,6 +33,9 @@ public:
   operator bool() const { return true; }
 };
 
+// CrossPoint uses HardwareSerial when ARDUINO_USB_CDC_ON_BOOT is not defined.
+// The simulator has a single stderr-backed serial endpoint, so both Arduino
+// serial types intentionally resolve to the same host implementation.
 using HardwareSerial = HWCDC;
 
 extern HWCDC Serial;

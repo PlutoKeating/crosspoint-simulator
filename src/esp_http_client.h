@@ -4,8 +4,8 @@
 #include <map>
 #include <string>
 
-#include "esp_err.h"
 #include "SimHttpFetch.h"
+#include "esp_err.h"
 
 enum http_event { HTTP_EVENT_ON_DATA, HTTP_EVENT_ON_HEADER };
 
@@ -92,7 +92,8 @@ inline esp_err_t esp_http_client_set_post_field(esp_http_client_handle_t handle,
                                                 const char *data, int len) {
   if (!handle)
     return ESP_FAIL;
-  handle->postField.assign(data ? data : "", len > 0 ? static_cast<size_t>(len) : 0);
+  handle->postField.assign(data ? data : "",
+                           len > 0 ? static_cast<size_t>(len) : 0);
   return ESP_OK;
 }
 
@@ -132,8 +133,10 @@ inline esp_err_t esp_http_client_perform(esp_http_client_handle_t handle) {
 
   const char *method = methodName(handle->config.method);
   sim_http_fetch::Response response;
-  if (!sim_http_fetch::fetch(handle->config.url, method, handle->headers, "",
-                             handle->postField.empty() ? nullptr : handle->postField.c_str(), response))
+  if (!sim_http_fetch::fetch(
+          handle->config.url, method, handle->headers, "",
+          handle->postField.empty() ? nullptr : handle->postField.c_str(),
+          response))
     return ESP_FAIL;
 
   handle->statusCode = response.statusCode;
@@ -159,16 +162,18 @@ inline esp_err_t esp_http_client_open(esp_http_client_handle_t handle,
   using namespace sim_http_client_detail;
   sim_http_fetch::Response response;
   std::string basicAuth;
-  if (handle->config.username && handle->config.auth_type != HTTP_AUTH_TYPE_NONE) {
+  if (handle->config.username &&
+      handle->config.auth_type != HTTP_AUTH_TYPE_NONE) {
     basicAuth = handle->config.username;
     basicAuth += ':';
     if (handle->config.password)
       basicAuth += handle->config.password;
   }
-  if (!sim_http_fetch::fetch(handle->config.url, methodName(handle->config.method),
-                             handle->headers, basicAuth,
-                             handle->postField.empty() ? nullptr : handle->postField.c_str(),
-                             response))
+  if (!sim_http_fetch::fetch(
+          handle->config.url, methodName(handle->config.method),
+          handle->headers, basicAuth,
+          handle->postField.empty() ? nullptr : handle->postField.c_str(),
+          response))
     return ESP_FAIL;
   handle->statusCode = response.statusCode;
   handle->responseBody = std::move(response.body);
@@ -184,7 +189,8 @@ inline int64_t esp_http_client_fetch_headers(esp_http_client_handle_t handle) {
   return static_cast<int64_t>(handle->responseBody.size());
 }
 
-inline esp_err_t esp_http_client_set_redirection(esp_http_client_handle_t /*handle*/) {
+inline esp_err_t
+esp_http_client_set_redirection(esp_http_client_handle_t /*handle*/) {
   // curl -L already follows redirects; no-op in simulator
   return ESP_OK;
 }
@@ -218,10 +224,8 @@ esp_http_client_is_complete_data_received(esp_http_client_handle_t handle) {
   return handle->bodyOffset >= handle->responseBody.size();
 }
 
-inline esp_err_t
-esp_http_client_get_and_clear_last_tls_error(esp_http_client_handle_t,
-                                             int *esp_tls_code,
-                                             int *esp_tls_flags) {
+inline esp_err_t esp_http_client_get_and_clear_last_tls_error(
+    esp_http_client_handle_t, int *esp_tls_code, int *esp_tls_flags) {
   if (esp_tls_code)
     *esp_tls_code = 0;
   if (esp_tls_flags)
@@ -232,17 +236,6 @@ esp_http_client_get_and_clear_last_tls_error(esp_http_client_handle_t,
 inline esp_err_t esp_http_client_cleanup(esp_http_client_handle_t handle) {
   delete handle;
   return ESP_OK;
-}
-
-inline const char *esp_err_to_name(esp_err_t err) {
-  switch (err) {
-  case ESP_OK:
-    return "ESP_OK";
-  case ESP_FAIL:
-    return "ESP_FAIL";
-  default:
-    return "ESP_ERR";
-  }
 }
 
 extern "C" {

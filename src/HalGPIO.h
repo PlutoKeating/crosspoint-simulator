@@ -49,6 +49,7 @@ public:
   inline bool deviceIsX3() const { return _deviceType == DeviceType::X3; }
   inline bool deviceIsX4() const { return _deviceType == DeviceType::X4; }
   bool isXteinkDevice() const;
+  bool hasEdgeSideButtons() const;
 
   // Start button GPIO and setup SPI for screen and SD card
   void begin();
@@ -67,10 +68,14 @@ public:
   unsigned long getHeldTime() const;
   unsigned long getPowerButtonHeldTime() const;
   bool hasTouch() const;
+  bool hasHomeKey() const;
+  bool wasHomeKeyPressed() const;
+  bool wasHomeKeyTapped() const;
+  bool wasHomeKeyLongPressed() const;
   bool wasTouchTap(float &nx, float &ny) const;
   bool wasTouchDown(float &nx, float &ny) const;
-  bool isTouchTapCandidate(float &nx, float &ny,
-                           unsigned long &heldMs) const;
+  bool wasTouchReleased() const;
+  bool isTouchTapCandidate(float &nx, float &ny, unsigned long &heldMs) const;
   bool isTouchHeldAt(float &nx, float &ny) const;
   unsigned long lastTouchHeldMs() const;
   bool wasSwipe(float &nxStart, float &nyStart, float &nxEnd,
@@ -83,6 +88,7 @@ public:
   void startDeepSleep();
 
   // Verify power button was held long enough after wakeup.
+  // The host wake path is synthetic, so verification always succeeds.
   bool verifyPowerButtonWakeup(uint16_t requiredDurationMs,
                                bool shortPressAllowed);
 

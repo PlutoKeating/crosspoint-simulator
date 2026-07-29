@@ -6,14 +6,14 @@
 HalClock halClock;
 
 void HalClock::begin() {
-#if defined(SIMULATOR_DEVICE_X3)
+#if defined(SIMULATOR_DEVICE_X3) || defined(SIMULATOR_DEVICE_X4_PRO)
   _available = true;
 #else
   _available = false;
 #endif
 }
 
-bool HalClock::getTime(uint8_t& hour, uint8_t& minute) const {
+bool HalClock::getTime(uint8_t &hour, uint8_t &minute) const {
   if (!_available)
     return false;
 
@@ -29,7 +29,8 @@ bool HalClock::getTime(uint8_t& hour, uint8_t& minute) const {
   return true;
 }
 
-bool HalClock::getDateTime(uint16_t& year, uint8_t& month, uint8_t& day, uint8_t& hour, uint8_t& minute) const {
+bool HalClock::getDateTime(uint16_t &year, uint8_t &month, uint8_t &day,
+                           uint8_t &hour, uint8_t &minute) const {
   if (!_available)
     return false;
 
@@ -48,7 +49,7 @@ bool HalClock::getDateTime(uint16_t& year, uint8_t& month, uint8_t& day, uint8_t
   return true;
 }
 
-bool HalClock::formatTime(char* buf, size_t bufSize,
+bool HalClock::formatTime(char *buf, size_t bufSize,
                           uint8_t utcOffsetQuarterHoursBiased,
                           bool use12Hour) const {
   if (bufSize < (use12Hour ? 9u : 6u))
@@ -63,9 +64,8 @@ bool HalClock::formatTime(char* buf, size_t bufSize,
     utcOffsetQuarterHoursBiased = 104;
   const int offsetQuarterHours =
       static_cast<int>(utcOffsetQuarterHoursBiased) - 48;
-  int totalMinutes =
-      static_cast<int>(hour) * 60 + static_cast<int>(minute) +
-      offsetQuarterHours * 15;
+  int totalMinutes = static_cast<int>(hour) * 60 + static_cast<int>(minute) +
+                     offsetQuarterHours * 15;
   totalMinutes = ((totalMinutes % 1440) + 1440) % 1440;
 
   const int hour24 = totalMinutes / 60;
@@ -75,15 +75,14 @@ bool HalClock::formatTime(char* buf, size_t bufSize,
     int hour12 = hour24 % 12;
     if (hour12 == 0)
       hour12 = 12;
-    std::snprintf(buf, bufSize, "%d:%02d %s", hour12, min,
-                  pm ? "PM" : "AM");
+    std::snprintf(buf, bufSize, "%d:%02d %s", hour12, min, pm ? "PM" : "AM");
   } else {
     std::snprintf(buf, bufSize, "%02d:%02d", hour24, min);
   }
   return true;
 }
 
-bool HalClock::formatDate(char* buf, size_t bufSize,
+bool HalClock::formatDate(char *buf, size_t bufSize,
                           uint8_t utcOffsetQuarterHoursBiased) const {
   if (bufSize < 13u || !_available)
     return false;
@@ -93,7 +92,8 @@ bool HalClock::formatDate(char* buf, size_t bufSize,
   const int offsetQuarterHours =
       static_cast<int>(utcOffsetQuarterHoursBiased) - 48;
   const std::time_t now =
-      std::time(nullptr) + static_cast<std::time_t>(offsetQuarterHours) * 15 * 60;
+      std::time(nullptr) +
+      static_cast<std::time_t>(offsetQuarterHours) * 15 * 60;
   std::tm utcTime{};
 #if defined(_WIN32)
   gmtime_s(&utcTime, &now);

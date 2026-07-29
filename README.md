@@ -6,7 +6,9 @@ A desktop simulator for [CrossPoint](https://github.com/crosspoint-reader/crossp
 > **Platform support:** macOS and Linux/WSL use different native compiler and library flags. Start from `sample-platformio-macos.ini` on macOS, or `sample-platformio-linux-wsl.ini` on Linux/WSL. Native Windows is not supported; use WSL and follow the Linux instructions.
 
 > [!WARNING]
-> This has been tested on ARM64 macOS (Apple Silicon, M4) and Ubuntu under WSL on Windows. Other platforms may need additional libraries or platform-specific stubs.
+> This has been tested on x86_64 macOS (Intel), ARM64 macOS (Apple Silicon,
+> M4), and Ubuntu under WSL on Windows. Other platforms may need additional
+> libraries or platform-specific stubs.
 
 ## Prerequisites
 
@@ -35,9 +37,24 @@ Add the simulator to your firmware's platformio.ini as a `lib_dep` and configure
 
 No scripts need to be copied into the firmware repo for the simulator to build. The simulator library automatically patches consumer-side compatibility issues from its own build script when PlatformIO fetches it as a dependency, including the common `GfxRenderer::setOrientation()` hook needed for SDL window resizing.
 
-Keep the sample `build_src_filter` exclusions unless your firmware has already moved those files behind simulator guards. In the current CrossPoint/CrossInk layout, the simulator library supplies the host-side file-transfer and update shims while the lower-level `WebServer`, `WebSocketsServer`, and `NetworkClient` shims let shared network routes run on the desktop build.
+Keep the sample `build_src_filter` exclusions unless your firmware has already
+moved those files behind simulator guards. In the current CrossPoint layout,
+the firmware-owned `CrossPointWebServer` and `WebDAVHandler` compile against
+the simulator's lower-level `WebServer`, `WebSocketsServer`, and
+`NetworkClient` shims. This exercises the real settings, files, status, and
+WebDAV routes instead of a reduced simulator-only substitute.
 
-The simulator defaults to the X4 panel shape. To simulate X3, add `-DSIMULATOR_DEVICE_X3` to the consuming firmware's simulator `build_flags`. That switches the framebuffer to 792x528 landscape, reports `gpio.deviceIsX3()` as true, and exposes the simulator tilt sensor by default.
+The simulator defaults to the X4 panel shape. Device-specific environments can
+extend the base simulator environment with one of these flags:
+
+- `-DSIMULATOR_DEVICE_X3` switches the framebuffer to 792x528 landscape,
+  selects the X3 board profile, and exposes the simulator tilt sensor.
+- `-DSIMULATOR_DEVICE_X4_PRO` keeps the X4 family's 800x480 framebuffer and
+  selects the X4 Pro board profile. It exposes touch and swipe input, the
+  capacitive Home key, the RTC, display inversion, and frontlight state.
+
+The sample PlatformIO files include ready-to-use `simulator_x3` and
+`simulator_x4_pro` environments.
 
 If a fork has a custom renderer and the auto-patch cannot recognize it, its simulator build should notify the display when orientation changes:
 
@@ -113,8 +130,64 @@ pio run -e simulator -t run_simulator
 | Escape | Back                               |
 | P      | Power                              |
 | S      | Simulate sleep                     |
+| H      | X4 Pro capacitive Home key         |
+| Mouse  | X4 Pro touch, tap, and swipe       |
 
 When the simulator is on the sleep screen, pressing any mapped simulator key wakes it. Under the hood the simulator relaunches itself and reports a synthetic power-button wake, because the native build has no real ESP deep-sleep resume path.
+
+## Automated QA and screenshots
+
+Two optional environment variables make repeatable navigation and screenshot
+tests possible without desktop-control permissions:
+
+- `CROSSPOINT_SIM_INPUT_SCRIPT` schedules input as
+  `<milliseconds>:<action>`, separated by semicolons. Button actions use
+  `<key>[:<hold-milliseconds>]`; keys are `BACK`, `ENTER`, `LEFT`, `RIGHT`,
+  `UP`, `DOWN`, `POWER`, `SLEEP`, `HOME`, and `QUIT`. A normal key press is
+  held for 80 ms unless a duration is provided.
+- X4 Pro touch actions use `TAP:<x>,<y>[,<hold-milliseconds>]` or
+  `SWIPE:<x1>,<y1>,<x2>,<y2>[,<duration-milliseconds>]`. Coordinates are in
+  displayed logical pixels, so they match UI layouts and screenshots after the
+  firmware changes orientation. Normalized coordinates from 0.0 to 1.0 are
+  also accepted for existing scripts.
+- `CROSSPOINT_SIM_SCREENSHOTS` saves BMP screenshots as
+  `<milliseconds>:<path>`, separated by semicolons. Create the destination
+  directory before running the simulator.
+- A sleep/wake test starts a fresh simulator process, matching the existing
+  deep-sleep model. Set `CROSSPOINT_SIM_INPUT_SCRIPT_AFTER_WAKE` and
+  `CROSSPOINT_SIM_SCREENSHOTS_AFTER_WAKE` for that second process. The
+  pre-sleep schedules are cleared during relaunch so they cannot repeat
+  forever.
+
+Times are measured from process startup. For example:
+
+```bash
+mkdir -p ./qa-artifacts
+CROSSPOINT_SIM_INPUT_SCRIPT='900:DOWN;1250:DOWN;1600:DOWN;1900:ENTER;3000:QUIT' \
+CROSSPOINT_SIM_SCREENSHOTS='2400:./qa-artifacts/settings.bmp' \
+  .pio/build/simulator/program
+```
+
+An X4 Pro touch and Home-key smoke test can use:
+
+```bash
+CROSSPOINT_SIM_INPUT_SCRIPT='2000:TAP:240,530;3000:HOME:100;3900:QUIT' \
+CROSSPOINT_SIM_SCREENSHOTS='2500:./qa-artifacts/x4-pro-settings.bmp;3500:./qa-artifacts/x4-pro-home.bmp' \
+  .pio/build/simulator_x4_pro/program
+```
+
+A deterministic sleep/wake smoke test can use:
+
+```bash
+CROSSPOINT_SIM_INPUT_SCRIPT='900:SLEEP;3500:ENTER' \
+CROSSPOINT_SIM_INPUT_SCRIPT_AFTER_WAKE='2200:QUIT' \
+CROSSPOINT_SIM_SCREENSHOTS_AFTER_WAKE='1600:./qa-artifacts/wake.bmp' \
+  .pio/build/simulator/program
+```
+
+The screenshot contains the SDL renderer output at the host's actual drawable
+resolution, including Retina/HiDPI scaling. BMP is used because it is supported
+directly by SDL2 and adds no image-encoding dependency to the simulator.
 
 ## Notes
 
@@ -147,11 +220,24 @@ write-to-SD, `.cpfont` validation, registry refresh, and font-selection flow.
 `WebSocketsServer`, and `NetworkClient` shims so firmware-owned file-transfer
 routes can run on the host. Firmware web servers that bind port 80 are exposed
 on `http://127.0.0.1:8080/`; WebSocket servers that bind port 81 are exposed on
-`ws://127.0.0.1:8081/`. This supports the browser file manager, WebSocket upload
+`ws://127.0.0.1:8081/`. Set `CROSSPOINT_SIM_HTTP_PORT` to another unprivileged
+port if that pair is occupied; the WebSocket endpoint uses the following port.
+For example, `CROSSPOINT_SIM_HTTP_PORT=18080` exposes HTTP on 18080 and
+WebSocket on 18081. This supports the browser file manager, WebSocket upload
 progress, streamed downloads, and common WebDAV-style requests such as
 `OPTIONS`, `PROPFIND`, `PUT`, `DELETE`, `MKCOL`, `MOVE`, and `COPY`. WebDAV
 `LOCK` and `UNLOCK` remain compatibility-only unless the firmware implements
 locking semantics.
+
+The `run_simulator` target also accepts the port through PlatformIO, which is
+convenient when the conflict is permanent on a development machine:
+
+```ini
+[env:simulator]
+custom_simulator_http_port = 18080
+```
+
+Direct binary launches use the environment variable form.
 
 **Firmware updates**: OTA and SD-card firmware flashing are non-destructive in
 the simulator. The simulator stubs those update paths so the UI can be opened

@@ -22,9 +22,9 @@ inline TaskHandle_t xTaskGetCurrentTaskHandle() {
 
 // Create a real OS thread. The FreeRTOS task function signature is
 // void(*)(void*).
-inline int xTaskCreate(void (*fn)(void *), const char *name,
-                       uint32_t /*stackDepth*/, void *param, int /*priority*/,
-                       TaskHandle_t *handle) {
+inline BaseType_t xTaskCreate(void (*fn)(void *), const char *name,
+                              uint32_t /*stackDepth*/, void *param,
+                              BaseType_t /*priority*/, TaskHandle_t *handle) {
   auto *h = new SimTaskHandle();
   h->name = name ? name : "sim-task";
   h->thread = std::thread([fn, param, h]() {
@@ -39,10 +39,11 @@ inline int xTaskCreate(void (*fn)(void *), const char *name,
 
 // Core pinning has no meaning on the host; delegate to xTaskCreate and
 // ignore the core ID.
-inline int xTaskCreatePinnedToCore(void (*fn)(void *), const char *name,
-                                   uint32_t stackDepth, void *param,
-                                   int priority, TaskHandle_t *handle,
-                                   int /*coreId*/) {
+inline BaseType_t xTaskCreatePinnedToCore(void (*fn)(void *), const char *name,
+                                          uint32_t stackDepth, void *param,
+                                          BaseType_t priority,
+                                          TaskHandle_t *handle,
+                                          BaseType_t /*coreId*/) {
   return xTaskCreate(fn, name, stackDepth, param, priority, handle);
 }
 

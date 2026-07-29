@@ -1,5 +1,6 @@
 #include "WebSocketsServer.h"
 
+#include "SimulatorNetworkPorts.h"
 #include <Logging.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -257,7 +258,8 @@ bool readWsFrame(int fd, WsFrame &frame) {
 } // namespace
 
 struct WebSocketsServer::Impl {
-  explicit Impl(int serverPort) : port(serverPort == 81 ? 8081 : serverPort) {}
+  explicit Impl(int serverPort)
+      : port(crosspoint_simulator::mapFirmwarePort(serverPort)) {}
 
   struct Event {
     uint8_t num = 0;

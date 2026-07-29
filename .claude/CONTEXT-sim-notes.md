@@ -8,7 +8,7 @@ The repo ships as a PlatformIO library; downstream firmware adds it as a `lib_de
 
 ## Current State
 
-The simulator builds and runs on macOS and Linux/WSL. Portrait orientation is correct, gray shading renders cleanly at HiDPI, file browsing lists EPUBs from `./fs_/books/`, and reading a book shows the "Indexing..." popup on first open before rendering pages. Window close exits cleanly. Icons render in the UI (drawImage / drawImageTransparent are now implemented, not stubs). JPEG and PNG decoder shims render rough host-side previews for EPUB images and PNG sleep overlays by default; native `PNGdec`/`JPEGDEC` can be enabled explicitly with `CROSSPOINT_SIM_USE_NATIVE_DECODERS`, `lib_compat_mode = off`, and simulator `lib_ignore = hal, WebSockets`. HalGPIO carries a DeviceType (X4 default, X3 selectable) so downstream code branching on device type compiles in the simulator. Host-backed web shims cover `WebServer`, `WebSocketsServer`, and `NetworkClient`, with firmware port 80 exposed on `http://127.0.0.1:8080/` and port 81 WebSockets exposed on `ws://127.0.0.1:8081/`.
+The simulator builds and runs on macOS and Linux/WSL. Portrait orientation is correct, gray shading renders cleanly at HiDPI, file browsing lists EPUBs from `./fs_/books/`, and reading a book shows the "Indexing..." popup on first open before rendering pages. Window close exits cleanly. Icons render in the UI (drawImage / drawImageTransparent are now implemented, not stubs). JPEG and PNG decoder shims render rough host-side previews for EPUB images and PNG sleep overlays by default; native `PNGdec`/`JPEGDEC` can be enabled explicitly with `CROSSPOINT_SIM_USE_NATIVE_DECODERS`, `lib_compat_mode = off`, and simulator `lib_ignore = hal, WebSockets`. BoardConfig exposes X4 by default, X3 via `SIMULATOR_DEVICE_X3`, and X4 Pro via `SIMULATOR_DEVICE_X4_PRO`. The X4 Pro profile keeps the 800x480 panel and adds touch/swipe input, the capacitive Home key, RTC, inversion, and frontlight state. Host-backed web shims cover `WebServer`, `WebSocketsServer`, and `NetworkClient`, with firmware port 80 exposed on `http://127.0.0.1:8080/` and port 81 WebSockets exposed on `ws://127.0.0.1:8081/`. `CROSSPOINT_SIM_HTTP_PORT` moves both host ports as a pair.
 
 ## Setup
 
@@ -69,7 +69,7 @@ pio run -e simulator -t run_simulator
 
 **Filesystem.** [HalStorage](src/HalStorage.cpp) uses POSIX file descriptors (`::open` / `::read` / `::write` / `lseek` / `fsync`) — not `std::fstream`. fstream's separate get/put pointers, eofbit-blocks-seek behaviour, and write-only mode restrictions caused several silent-corruption bugs early on; POSIX fds avoid all of them. `HalStorage::open()` `stat()`s the path and routes to `openAsDir` (DIR\*) or file-open. Directory iteration uses `readdir`/`rewinddir`, skipping any entry starting with `.`. All paths are prefixed with `./fs_` so the simulator's filesystem is sandboxed in a single directory under the binary's working dir.
 
-**Input.** [HalGPIO::update](src/HalGPIO.cpp) owns the SDL event pump (so polling isn't split between callers). It maps SDL scancodes → button indices (`BTN_BACK=0` … `BTN_POWER=6`) and maintains per-frame pressed/released arrays. `SDL_QUIT` sets the shared `quitRequested` atomic that `HalDisplay::shouldQuit()` reads.
+**Input.** [HalGPIO::update](src/HalGPIO.cpp) owns the SDL event pump (so polling isn't split between callers). It maps SDL scancodes → button indices (`BTN_BACK=0` … `BTN_POWER=6`) and maintains per-frame pressed/released arrays. On X4 Pro, SDL mouse input is transformed from the oriented logical window back into normalized physical touch coordinates, and `H` emulates the capacitive Home key. `SDL_QUIT` sets the shared `quitRequested` atomic that `HalDisplay::shouldQuit()` reads.
 
 **Threading.** [src/freertos/](src/freertos/) maps `xTaskCreate` to `std::thread`, `ulTaskNotifyTake`/`xTaskNotify` to a condvar + counter, and `SemaphoreHandle_t` to `std::recursive_mutex`. `thread_local SimTaskHandle*` lets each task thread find its own handle for notifies.
 
@@ -106,7 +106,7 @@ pio run -e simulator -t run_simulator
 ### Host-backed web server shims (2026-05-10)
 
 - [src/WebServer.cpp](src/WebServer.cpp), [src/WebSocketsServer.cpp](src/WebSocketsServer.cpp), and [src/NetworkClient.cpp](src/NetworkClient.cpp) provide native socket-backed shims for firmware web routes. Firmware servers that bind port 80 are exposed on `http://127.0.0.1:8080/`; WebSocket servers that bind port 81 are exposed on `ws://127.0.0.1:8081/`.
-- The sample PlatformIO files still exclude `network/CrossPointWebServer.cpp`, `network/WebDAVHandler.cpp`, and updater/flasher files for the current CrossPoint/CrossInk layout. Those exclusions avoid compiling embedded-only or duplicate host-side implementations while the simulator library supplies compatible desktop paths.
+- The sample PlatformIO files compile the current firmware-owned `network/CrossPointWebServer.cpp` and `network/WebDAVHandler.cpp` with `CROSSPOINT_SIMULATOR_PROJECT_WEBSERVER`, which disables the simulator's legacy reduced substitute. Only embedded updater/flasher paths remain excluded.
 
 ### HalStorage menu-items fix (commit 40c578e, 2026-04-19)
 

@@ -35,6 +35,11 @@ public:
                             uint16_t w, uint16_t h,
                             bool fromProgmem = false) const;
 
+  // Persistent black/white polarity used by the X4 Pro frontlight panel.
+  void setInverted(bool inverted);
+  bool toggleInverted();
+  bool isInverted() const;
+
   void displayBuffer(RefreshMode mode = RefreshMode::FAST_REFRESH,
                      bool turnOffScreen = false);
   void displayBufferAsync(RefreshMode mode = RefreshMode::FAST_REFRESH);
@@ -76,7 +81,7 @@ public:
   // builds exercise the same low-memory path as the device firmware, and so
   // streamed plane data can feed the same grayscale preview compositor as the
   // legacy full-frame API.
-  void writeGrayscalePlaneStrip(bool lsbPlane, const uint8_t* rows,
+  void writeGrayscalePlaneStrip(bool lsbPlane, const uint8_t *rows,
                                 uint16_t yStart, uint16_t numRows);
   bool supportsStripGrayscale() const;
 
@@ -87,6 +92,7 @@ public:
 
 private:
   EInkDisplay einkDisplay;
+  bool inverted = false;
 };
 
 extern HalDisplay display;

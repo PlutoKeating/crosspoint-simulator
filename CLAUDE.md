@@ -39,13 +39,36 @@ The simulator is a collection of host-side reimplementations of the firmware's h
 **Host-specific code paths:**
 
 - MD5: [src/MD5Builder.h](src/MD5Builder.h) is a thin dispatcher that auto-selects the implementation via `#ifdef __APPLE__` / `#elif __linux__`. [src/MD5Builder_mac.h](src/MD5Builder_mac.h) uses CommonCrypto; [src/MD5Builder_linux.h](src/MD5Builder_linux.h) uses OpenSSL. No downstream swapping is needed - just include `MD5Builder.h`.
-- Web server shims: [src/WebServer.cpp](src/WebServer.cpp), [src/WebSocketsServer.cpp](src/WebSocketsServer.cpp), and [src/NetworkClient.cpp](src/NetworkClient.cpp) expose firmware port 80 as `http://127.0.0.1:8080/` and port 81 WebSockets as `ws://127.0.0.1:8081/`. For the current CrossPoint/CrossInk layout, keep the sample exclusions for `network/CrossPointWebServer.cpp` and `network/WebDAVHandler.cpp`; the simulator library still owns those host-side compatibility paths.
-- Build flags: macOS uses `-arch arm64` and `/opt/homebrew/{include,lib}`; Linux/WSL adds `-lssl -lcrypto -Wno-deprecated-declarations` (OpenSSL 3.x deprecates `MD5_*`). See [sample-platformio-macos.ini](sample-platformio-macos.ini) and [sample-platformio-linux-wsl.ini](sample-platformio-linux-wsl.ini). Keep both in sync when build flags change. Native Windows is not supported, WSL is.
+- Web server shims: [src/WebServer.cpp](src/WebServer.cpp), [src/WebSocketsServer.cpp](src/WebSocketsServer.cpp), and [src/NetworkClient.cpp](src/NetworkClient.cpp) expose firmware port 80 as `http://127.0.0.1:8080/` and port 81 WebSockets as `ws://127.0.0.1:8081/`. `CROSSPOINT_SIM_HTTP_PORT` moves the pair together when either port is occupied. Current CrossPoint builds compile their firmware-owned `CrossPointWebServer.cpp` and `WebDAVHandler.cpp` against these shims; `CROSSPOINT_SIMULATOR_PROJECT_WEBSERVER` disables only the legacy reduced substitute in this library.
+- Build flags: macOS gets architecture-correct SDL compiler and linker flags
+  from `sdl2-config`, so the same sample works on Intel and Apple Silicon.
+  Linux/WSL additionally links OpenSSL with
+  `-lssl -lcrypto -Wno-deprecated-declarations` (OpenSSL 3.x deprecates
+  `MD5_*`). See
+  [sample-platformio-macos.ini](sample-platformio-macos.ini) and
+  [sample-platformio-linux-wsl.ini](sample-platformio-linux-wsl.ini). Keep
+  both in sync when build flags change. Native Windows is not supported, WSL
+  is.
 - Linker stubs: [src/firmware_link_stubs.cpp](src/firmware_link_stubs.cpp) provides symbols the firmware expects from other translation units (uzlib checksums, HWCDC Serial shim, LUT stubs). When the firmware adds a new global-extern symbol with no simulator counterpart, add its stub here.
 
-## Input mapping (lives in [src/HalGPIO.cpp](src/HalGPIO.cpp))
+## Device profiles and input mapping
+
+[src/BoardConfig.h](src/BoardConfig.h) selects X4 by default,
+`SIMULATOR_DEVICE_X3` for X3, and `SIMULATOR_DEVICE_X4_PRO` for X4 Pro. Keep
+the reported board capabilities aligned with the firmware SDK. X4 Pro uses the
+same 800x480 display geometry as X4 but adds touch, a capacitive Home key,
+frontlight state, inversion, and an RTC.
 
 `HalGPIO::update` owns the SDL event pump for the whole simulator, do not poll SDL events elsewhere. Scancodes map to button indices `BTN_BACK=0` through `BTN_POWER=6`. `SDL_QUIT` sets the `quitRequested` atomic that `HalDisplay::shouldQuit()` reads.
+
+For repeatable QA, `CROSSPOINT_SIM_INPUT_SCRIPT` schedules synthetic key
+and X4 Pro touch edges through the same `HalGPIO` state as real SDL input, and
+`CROSSPOINT_SIM_SCREENSHOTS` captures renderer output on the SDL main thread.
+Keep synthetic held-time timestamps on the `SDL_GetTicks()` clock used by real
+keyboard events; the firmware's `millis()` clock has a different origin. The
+deep-sleep loop must also process synthetic input. Process relaunch promotes
+the optional `*_AFTER_WAKE` schedules and clears the pre-sleep schedules so
+automation cannot enter an infinite sleep/relaunch cycle.
 
 ## When making changes
 

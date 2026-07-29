@@ -20,8 +20,9 @@ struct SimPortMux {
   std::recursive_mutex mtx;
 };
 typedef SimPortMux portMUX_TYPE;
-#define portMUX_INITIALIZER_UNLOCKED                                          \
-  {}
+#define portMUX_INITIALIZER_UNLOCKED                                           \
+  {                                                                            \
+  }
 
 inline void taskENTER_CRITICAL(portMUX_TYPE *mux) { mux->mtx.lock(); }
 inline void taskEXIT_CRITICAL(portMUX_TYPE *mux) { mux->mtx.unlock(); }
