@@ -243,6 +243,16 @@ void HalDisplay::displayBuffer(RefreshMode mode, bool turnOffScreen) {
   refreshDisplay(mode, turnOffScreen);
 }
 
+void HalDisplay::displayBufferAsync(RefreshMode mode) {
+  // SDL presentation is already handed off to the main thread, but the host
+  // framebuffer has no panel waveform whose lifetime must be tracked.
+  displayBuffer(mode, false);
+}
+
+void HalDisplay::waitRefreshComplete() {}
+
+bool HalDisplay::supportsAsyncRefresh() const { return false; }
+
 void HalDisplay::displayWindow(int, int, int, int) {
   refreshDisplay(RefreshMode::FAST_REFRESH, false);
 }

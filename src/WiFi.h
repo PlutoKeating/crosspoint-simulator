@@ -32,6 +32,8 @@ enum wifi_auth_mode_t { WIFI_AUTH_OPEN = 0, WIFI_AUTH_WPA2_PSK = 3 };
 
 #define WIFI_MODE_STA WIFI_STA
 #define WIFI_MODE_AP WIFI_AP
+#define WIFI_ALL_CHANNEL_SCAN 0
+#define WIFI_CONNECT_AP_BY_SIGNAL 0
 
 class IPAddress {
   uint8_t bytes[4] = {0, 0, 0, 0};
@@ -253,6 +255,13 @@ public:
     return i >= 0 && i < static_cast<int>(networks.size()) ? networks[i].ssid
                                                            : String();
   }
+  void BSSID(uint8_t *bssid) {
+    if (!bssid)
+      return;
+    const std::array<uint8_t, 6> value{0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
+    memcpy(bssid, value.data(), value.size());
+  }
+  int channel() { return 1; }
   int RSSI() { return -45; }
   int RSSI(int i) {
     const auto &networks = configuredNetworks();
@@ -265,6 +274,8 @@ public:
                                                            : WIFI_AUTH_OPEN;
   }
   void setHostname(const char *) {}
+  void setScanMethod(int) {}
+  void setSortMethod(int) {}
   wifi_mode_t getMode() { return currentMode; }
   void setSleep(bool) {}
   void setAutoReconnect(bool) {}

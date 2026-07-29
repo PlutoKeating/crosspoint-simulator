@@ -164,6 +164,20 @@ unsigned long HalGPIO::getPowerButtonHeldTime() const {
   return SDL_GetTicks() - buttonPressTime[BTN_POWER];
 }
 
+bool HalGPIO::hasTouch() const { return false; }
+bool HalGPIO::wasTouchTap(float &, float &) const { return false; }
+bool HalGPIO::wasTouchDown(float &, float &) const { return false; }
+bool HalGPIO::isTouchTapCandidate(float &, float &, unsigned long &) const {
+  return false;
+}
+bool HalGPIO::isTouchHeldAt(float &, float &) const { return false; }
+unsigned long HalGPIO::lastTouchHeldMs() const { return 0; }
+bool HalGPIO::wasSwipe(float &, float &, float &, float &) const {
+  return false;
+}
+bool HalGPIO::wasTouchActivity() const { return false; }
+void HalGPIO::setSharedConfirmPowerShortPressEmitsPower(bool) {}
+
 bool HalGPIO::consumeSimulatorSleepRequest() {
   const bool requested = simulatorSleepRequested;
   simulatorSleepRequested = false;
@@ -200,7 +214,10 @@ void HalGPIO::startDeepSleep() {
     SDL_Delay(10);
   }
 }
-void HalGPIO::verifyPowerButtonWakeup(uint16_t /*requiredDurationMs*/,
-                                      bool /*shortPressAllowed*/) {}
+bool HalGPIO::verifyPowerButtonWakeup(uint16_t /*requiredDurationMs*/,
+                                     bool /*shortPressAllowed*/) {
+  return true;
+}
+bool HalGPIO::isXteinkDevice() const { return true; }
 
 HalGPIO gpio;

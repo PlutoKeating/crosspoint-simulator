@@ -33,4 +33,6 @@ public:
   operator bool() const { return true; }
 };
 
+using HardwareSerial = HWCDC;
+
 extern HWCDC Serial;

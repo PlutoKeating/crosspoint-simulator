@@ -4,34 +4,53 @@
 #include <cstdint>
 #include <cstring>
 
+#if defined(__APPLE__)
+#include <CommonCrypto/CommonDigest.h>
+#elif defined(__linux__)
+#include <openssl/sha.h>
+#else
+#error "Unsupported host OS for simulator SHA-256"
+#endif
+
 struct mbedtls_sha256_context {
-  uint8_t digest[32] = {};
+#if defined(__APPLE__)
+  CC_SHA256_CTX context{};
+#else
+  SHA256_CTX context{};
+#endif
 };
 
 inline void mbedtls_sha256_init(mbedtls_sha256_context *ctx) {
-  if (ctx) std::memset(ctx->digest, 0, sizeof(ctx->digest));
+  if (ctx) std::memset(ctx, 0, sizeof(*ctx));
 }
 
-inline int mbedtls_sha256_starts(mbedtls_sha256_context *, int) {
-  return 0;
+inline int mbedtls_sha256_starts(mbedtls_sha256_context *ctx, int is224) {
+  if (!ctx || is224) return -1;
+#if defined(__APPLE__)
+  return CC_SHA256_Init(&ctx->context) == 1 ? 0 : -1;
+#else
+  return SHA256_Init(&ctx->context) == 1 ? 0 : -1;
+#endif
 }
 
 inline int mbedtls_sha256_update(mbedtls_sha256_context *ctx, const unsigned char *input, size_t ilen) {
-  if (!ctx || !input) return 0;
-  for (size_t i = 0; i < ilen; ++i) {
-    ctx->digest[i % sizeof(ctx->digest)] ^= input[i];
-  }
-  return 0;
+  if (!ctx || (!input && ilen != 0)) return -1;
+#if defined(__APPLE__)
+  return CC_SHA256_Update(&ctx->context, input, static_cast<CC_LONG>(ilen)) == 1 ? 0 : -1;
+#else
+  return SHA256_Update(&ctx->context, input, ilen) == 1 ? 0 : -1;
+#endif
 }
 
 inline int mbedtls_sha256_finish(mbedtls_sha256_context *ctx, unsigned char output[32]) {
-  if (!output) return 0;
-  if (ctx) {
-    std::memcpy(output, ctx->digest, sizeof(ctx->digest));
-  } else {
-    std::memset(output, 0, 32);
-  }
-  return 0;
+  if (!ctx || !output) return -1;
+#if defined(__APPLE__)
+  return CC_SHA256_Final(output, &ctx->context) == 1 ? 0 : -1;
+#else
+  return SHA256_Final(output, &ctx->context) == 1 ? 0 : -1;
+#endif
 }
 
-inline void mbedtls_sha256_free(mbedtls_sha256_context *) {}
+inline void mbedtls_sha256_free(mbedtls_sha256_context *ctx) {
+  if (ctx) std::memset(ctx, 0, sizeof(*ctx));
+}
