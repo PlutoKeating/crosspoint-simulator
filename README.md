@@ -191,6 +191,11 @@ directly by SDL2 and adds no image-encoding dependency to the simulator.
 
 ## Notes
 
+The `SecureHttpClient` shim mirrors the firmware streaming `GET` callback and
+completion/status accessors used by authenticated Project.Stick v2 downloads.
+The host implementation may buffer the body because simulator RAM is not
+device-constrained, but callback and abort semantics must remain compatible.
+
 **Host-backed network flows**: OPDS/catalog downloads and KOReader sync use the
 host's `curl` binary through simulator implementations of `HTTPClient` and
 `esp_http_client`. This keeps the firmware code path intact while allowing the
