@@ -3,6 +3,7 @@
 #include <dirent.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <sys/statvfs.h>
 #include <unistd.h>
 
 #include <cerrno>
@@ -88,6 +89,17 @@ bool HalStorage::begin() {
   return ::mkdir(root.c_str(), 0777) == 0 || errno == EEXIST;
 }
 bool HalStorage::ready() const { return true; }
+uint64_t HalStorage::totalBytes() const {
+  struct statvfs capacity {};
+  if (statvfs(configuredStorageRoot().c_str(), &capacity) != 0) return 0;
+  return uint64_t(capacity.f_blocks) * capacity.f_frsize;
+}
+uint64_t HalStorage::usedBytes() const {
+  struct statvfs capacity {};
+  if (statvfs(configuredStorageRoot().c_str(), &capacity) != 0) return 0;
+  // Use available blocks, including the host's reserved space as unavailable.
+  return uint64_t(capacity.f_blocks - capacity.f_bavail) * capacity.f_frsize;
+}
 
 class HalFile::Impl {
 public:

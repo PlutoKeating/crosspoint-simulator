@@ -260,3 +260,12 @@ quality, refresh behaviour, or memory pressure.
 
 > [!WARNING]
 > **Upstream compatibility:** The simulator mirrors interfaces used by Crosspoint. If Crosspoint adds or changes methods in a shared library and the simulator build reaches that code path, the simulator can fail to compile or link until a matching implementation or stub is added here. In many cases this is just a small no-op shim. Open a PR if the change is broadly applicable to CrossPoint-based forks.
+
+## StockStick single-screen programs
+
+`HalStorage::totalBytes()` and `usedBytes()` report capacity of the host filesystem
+containing `CROSSPOINT_SIM_SD`. Studio frame/program downloads use these methods
+for the same capacity preflight as the device. They do not measure a physical SD
+card. Use a separate temporary SD root for tests; do not reuse personal book data.
+The firmware's BLE adapter is a no-op in native simulation. SDL screen and
+schedule checks cannot establish real BLE, power, OTA or e-ink refresh behavior.
