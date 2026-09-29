@@ -38,11 +38,12 @@ Add the simulator to your firmware's platformio.ini as a `lib_dep` and configure
 No scripts need to be copied into the firmware repo for the simulator to build. The simulator library automatically patches consumer-side compatibility issues from its own build script when PlatformIO fetches it as a dependency, including the common `GfxRenderer::setOrientation()` hook needed for SDL window resizing.
 
 Keep the sample `build_src_filter` exclusions unless your firmware has already
-moved those files behind simulator guards. In the current CrossPoint layout,
-the firmware-owned `CrossPointWebServer` and `WebDAVHandler` compile against
-the simulator's lower-level `WebServer`, `WebSocketsServer`, and
-`NetworkClient` shims. This exercises the real settings, files, status, and
-WebDAV routes instead of a reduced simulator-only substitute.
+moved those files behind simulator guards. The StockStick firmware no longer
+ships the upstream web file server, so this fork no longer provides the
+`WebServer` / `WebSocketsServer` shims; `NetworkClient` remains for the
+firmware's authenticated HTTPS paths. StockStick firmware also needs
+`lib_ldf_mode = deep+` so project libraries such as `EpdFont` resolve for the
+simulator's HAL sources.
 
 The simulator defaults to the X4 panel shape. Device-specific environments can
 extend the base simulator environment with one of these flags:
@@ -65,7 +66,7 @@ display.setSimulatorOrientation(static_cast<int>(o));
 ```
 
 Put that in the renderer's orientation setter after updating the renderer's own orientation state.
-By default, the simulator keeps its own `JPEGDEC`, `PNGdec`, and QRCode compatibility shims so existing firmware projects can update this library without changing their simulator environment. To test against the native decoder libraries instead, follow the opt-in comments in the sample PlatformIO files: define `CROSSPOINT_SIM_USE_NATIVE_DECODERS`, set `lib_compat_mode = off`, change simulator `lib_ignore` to `hal, WebSockets`, and add the native `PNGdec`/`JPEGDEC` dependencies. `WebSockets` is ignored only in native simulator builds because this repo supplies the host-backed `WebSocketsServer` implementation.
+By default, the simulator keeps its own `JPEGDEC`, `PNGdec`, and QRCode compatibility shims so existing firmware projects can update this library without changing their simulator environment. To test against the native decoder libraries instead, follow the opt-in comments in the sample PlatformIO files: define `CROSSPOINT_SIM_USE_NATIVE_DECODERS`, set `lib_compat_mode = off`, change simulator `lib_ignore` to `hal`, and add the native `PNGdec`/`JPEGDEC` dependencies.
 
 If you only want a self-contained simulator dependency, stop there.
 
@@ -79,7 +80,6 @@ custom_run_simulator_target_owner = project
 extra_scripts =
   pre:scripts/gen_i18n.py
   pre:scripts/git_branch.py
-  pre:scripts/build_html.py
   post:.pio/libdeps/$PIOENV/simulator/run_simulator_project.py
 ```
 
@@ -91,7 +91,6 @@ custom_run_simulator_target_owner = project
 extra_scripts =
   pre:scripts/gen_i18n.py
   pre:scripts/git_branch.py
-  pre:scripts/build_html.py
   post:../crosspoint-simulator/run_simulator_project.py
 ```
 
@@ -220,29 +219,6 @@ CROSSPOINT_SIM_HTTP_MOCK_ROOT="$PWD/lib/EpdFont/scripts/output" \
 
 The mock still uses the firmware's normal manifest parsing, file download,
 write-to-SD, `.cpfont` validation, registry refresh, and font-selection flow.
-
-**File transfer**: The simulator provides host-backed `WebServer`,
-`WebSocketsServer`, and `NetworkClient` shims so firmware-owned file-transfer
-routes can run on the host. Firmware web servers that bind port 80 are exposed
-on `http://127.0.0.1:8080/`; WebSocket servers that bind port 81 are exposed on
-`ws://127.0.0.1:8081/`. Set `CROSSPOINT_SIM_HTTP_PORT` to another unprivileged
-port if that pair is occupied; the WebSocket endpoint uses the following port.
-For example, `CROSSPOINT_SIM_HTTP_PORT=18080` exposes HTTP on 18080 and
-WebSocket on 18081. This supports the browser file manager, WebSocket upload
-progress, streamed downloads, and common WebDAV-style requests such as
-`OPTIONS`, `PROPFIND`, `PUT`, `DELETE`, `MKCOL`, `MOVE`, and `COPY`. WebDAV
-`LOCK` and `UNLOCK` remain compatibility-only unless the firmware implements
-locking semantics.
-
-The `run_simulator` target also accepts the port through PlatformIO, which is
-convenient when the conflict is permanent on a development machine:
-
-```ini
-[env:simulator]
-custom_simulator_http_port = 18080
-```
-
-Direct binary launches use the environment variable form.
 
 **Firmware updates**: OTA and SD-card firmware flashing are non-destructive in
 the simulator. The simulator stubs those update paths so the UI can be opened
