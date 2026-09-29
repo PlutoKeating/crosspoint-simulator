@@ -1,4 +1,5 @@
 #pragma once
+#include <cstdint>
 #include <condition_variable>
 #include <mutex>
 #include <thread>
@@ -10,6 +11,9 @@
 #define portTICK_PERIOD_MS 1
 
 using BaseType_t = int;
+// One simulated tick is one millisecond.
+using TickType_t = uint32_t;
+#define pdMS_TO_TICKS(ms) (static_cast<TickType_t>(ms))
 
 // ESP-IDF's portMUX_TYPE is a spinlock used with taskENTER_CRITICAL /
 // taskEXIT_CRITICAL to guard data shared between tasks (and, on multi-core

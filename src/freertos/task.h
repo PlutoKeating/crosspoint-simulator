@@ -1,4 +1,5 @@
 #pragma once
+#include <chrono>
 #include <cstdint>
 
 #include "FreeRTOS.h"
@@ -47,12 +48,18 @@ inline BaseType_t xTaskCreatePinnedToCore(void (*fn)(void *), const char *name,
   return xTaskCreate(fn, name, stackDepth, param, priority, handle);
 }
 
-// Block until notified (simulates ulTaskNotifyTake with clear-on-exit).
-inline uint32_t ulTaskNotifyTake(int /*clearOnExit*/,
-                                 uint32_t /*ticksToWait*/) {
+// Block until notified or `ticksToWait` ms pass (portMAX_DELAY waits
+// forever). Returns 0 on timeout, like the device.
+inline uint32_t ulTaskNotifyTake(int /*clearOnExit*/, uint32_t ticksToWait) {
   auto *h = xTaskGetCurrentTaskHandle();
   std::unique_lock<std::mutex> lk(h->mtx);
-  h->cv.wait(lk, [h] { return h->notifyCount > 0; });
+  const auto ready = [h] { return h->notifyCount > 0; };
+  if (ticksToWait == portMAX_DELAY) {
+    h->cv.wait(lk, ready);
+  } else if (!h->cv.wait_for(lk, std::chrono::milliseconds(ticksToWait),
+                             ready)) {
+    return 0;
+  }
   h->notifyCount--;
   return 1;
 }
