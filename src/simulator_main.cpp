@@ -13,6 +13,7 @@ extern HalDisplay display; // defined in main.cpp
 
 int main(int argc, char **argv) {
   SimulatorLifecycle::initProcessArgs(argv);
+  SimulatorLifecycle::applyProvisionedIdentity();
   setup();
   while (!display.shouldQuit()) {
     // Clear input edge latches once per frame. update() may be called many
