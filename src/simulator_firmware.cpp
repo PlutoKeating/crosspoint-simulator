@@ -83,3 +83,6 @@ void onCleanShutdown() {}
 Outcome pendingOutcome() { return {}; }
 void clearOutcome() {}
 } // namespace ota_trial
+namespace ota_trial {
+bool hasPendingOutcome() { return false; }
+} // namespace ota_trial
