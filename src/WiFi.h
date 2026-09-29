@@ -70,9 +70,17 @@ class WiFiClass {
     wifi_auth_mode_t auth;
   };
 
+#ifdef __EMSCRIPTEN__
+  // In the browser the page already has a network connection; the firmware
+  // sees an associated station from boot, like a device with saved Wi-Fi.
+  wifi_mode_t currentMode = WIFI_STA;
+  wl_status_t currentStatus = WL_CONNECTED;
+  String currentSsid = "Simulator WiFi (fake)";
+#else
   wifi_mode_t currentMode = WIFI_OFF;
   wl_status_t currentStatus = WL_DISCONNECTED;
   String currentSsid;
+#endif
   std::array<uint8_t, 6> currentBssid{0x02, 0x00, 0x00, 0x00, 0x00, 0x02};
   wifi_scan_method_t scanMethod = WIFI_FAST_SCAN;
   wifi_sort_method_t sortMethod = WIFI_CONNECT_AP_BY_SIGNAL;

@@ -4,6 +4,9 @@
 #include <cstdlib>
 #include <cstring>
 #include <unistd.h>
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
 
 namespace {
 
@@ -46,6 +49,15 @@ WakeReason consumeWakeReason() {
 }
 
 [[noreturn]] void rebootAsPowerWake() {
+#ifdef __EMSCRIPTEN__
+  // A browser tab cannot re-exec itself: the page persists the SD image and
+  // reloads with a power-button wake reason (see the web loader).
+  MAIN_THREAD_EM_ASM({
+    if (Module.simReboot) Module.simReboot("power");
+  });
+  while (true)
+    usleep(1000 * 1000);
+#else
   if (!gArgv || !gArgv[0]) {
     std::fputs("SimulatorLifecycle: missing argv for reboot\n", stderr);
     _exit(1);
@@ -62,6 +74,7 @@ WakeReason consumeWakeReason() {
 
   std::perror("execvp");
   _exit(1);
+#endif
 }
 
 } // namespace SimulatorLifecycle

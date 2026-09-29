@@ -1,25 +1,34 @@
 #include "qrcode.h"
 
 #include <cstdint>
+#include <cstdlib>
+#include <cstring>
 
-// Minimal stubs so QrUtils compiles and links in the simulator.
-// Actual QR rendering is not needed for simulator functionality.
+namespace ricmoo {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-function"
+#pragma GCC diagnostic ignored "-Wsign-compare"
+#include "third_party/ricmoo_qrcode.inc"
+#pragma GCC diagnostic pop
+} // namespace ricmoo
+
+static_assert(sizeof(QRCode) == sizeof(ricmoo::QRCode),
+              "QRCode must mirror ricmoo::QRCode");
 
 uint32_t qrcode_getBufferSize(uint8_t version) {
-  // Formula from the real library: ((version * 4 + 17) * (version * 4 + 17) +
-  // 7) / 8 + 1
-  uint8_t size = version * 4 + 17;
-  return ((uint32_t)size * size + 7) / 8 + 1;
+  return ricmoo::qrcode_getBufferSize(version);
 }
 
-int8_t qrcode_initText(QRCode *qrcode, uint8_t * /*modules*/, uint8_t version,
-                       QrCodeEcc /*ecc*/, const char * /*data*/) {
-  if (qrcode) {
-    qrcode->size = version * 4 + 17;
-  }
-  return 0;
+int8_t qrcode_initText(QRCode *qrcode, uint8_t *modules, uint8_t version,
+                       QrCodeEcc ecc, const char *data) {
+  return ricmoo::qrcode_initText(reinterpret_cast<ricmoo::QRCode *>(qrcode),
+                                 modules, version, static_cast<uint8_t>(ecc),
+                                 data);
 }
 
-int qrcode_getModule(QRCode * /*qrcode*/, uint8_t /*x*/, uint8_t /*y*/) {
-  return 0;
+int qrcode_getModule(QRCode *qrcode, uint8_t x, uint8_t y) {
+  return ricmoo::qrcode_getModule(reinterpret_cast<ricmoo::QRCode *>(qrcode), x,
+                                  y)
+             ? 1
+             : 0;
 }

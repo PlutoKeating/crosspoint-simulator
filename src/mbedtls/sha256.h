@@ -4,6 +4,35 @@
 #include <cstdint>
 #include <cstring>
 
+#if defined(__EMSCRIPTEN__)
+#include "../web/portable_hash.h"
+
+struct mbedtls_sha256_context {
+  sim_hash::Sha256 context{};
+};
+
+inline void mbedtls_sha256_init(mbedtls_sha256_context *ctx) {
+  if (ctx) std::memset(ctx, 0, sizeof(*ctx));
+}
+inline int mbedtls_sha256_starts(mbedtls_sha256_context *ctx, int is224) {
+  if (!ctx || is224) return -1;
+  ctx->context.init();
+  return 0;
+}
+inline int mbedtls_sha256_update(mbedtls_sha256_context *ctx, const unsigned char *input, size_t ilen) {
+  if (!ctx || (!input && ilen != 0)) return -1;
+  ctx->context.update(input, ilen);
+  return 0;
+}
+inline int mbedtls_sha256_finish(mbedtls_sha256_context *ctx, unsigned char output[32]) {
+  if (!ctx || !output) return -1;
+  ctx->context.finish(output);
+  return 0;
+}
+inline void mbedtls_sha256_free(mbedtls_sha256_context *ctx) {
+  if (ctx) std::memset(ctx, 0, sizeof(*ctx));
+}
+#else
 #if defined(__APPLE__)
 #include <CommonCrypto/CommonDigest.h>
 #elif defined(__linux__)
@@ -54,3 +83,4 @@ inline int mbedtls_sha256_finish(mbedtls_sha256_context *ctx, unsigned char outp
 inline void mbedtls_sha256_free(mbedtls_sha256_context *ctx) {
   if (ctx) std::memset(ctx, 0, sizeof(*ctx));
 }
+#endif // __EMSCRIPTEN__

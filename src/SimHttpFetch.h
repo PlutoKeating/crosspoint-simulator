@@ -9,8 +9,14 @@
 
 #include <dirent.h>
 #include <sys/stat.h>
-#include <sys/wait.h>
 #include <unistd.h>
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#include <emscripten/fetch.h>
+#include <vector>
+#else
+#include <sys/wait.h>
+#endif
 
 namespace sim_http_fetch {
 
@@ -181,6 +187,79 @@ inline bool fetchFromMockRoot(const std::string &url, Response &out) {
   return false;
 }
 
+#ifdef __EMSCRIPTEN__
+inline std::string base64Encode(const std::string &input) {
+  static const char *table =
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  std::string out;
+  int val = 0, bits = -6;
+  for (unsigned char c : input) {
+    val = (val << 8) + c;
+    bits += 8;
+    while (bits >= 0) {
+      out.push_back(table[(val >> bits) & 0x3F]);
+      bits -= 6;
+    }
+  }
+  if (bits > -6)
+    out.push_back(table[((val << 8) >> (bits + 8)) & 0x3F]);
+  while (out.size() % 4)
+    out.push_back('=');
+  return out;
+}
+
+// Browser build: a synchronous fetch from the firmware's worker thread. The
+// browser handles TLS, redirects and same-origin credentials.
+inline bool fetchWithBrowser(const std::string &url, const char *method,
+                             const std::map<std::string, std::string> &headers,
+                             const std::string &basicAuth, const char *body,
+                             Response &out) {
+  emscripten_fetch_attr_t attr;
+  emscripten_fetch_attr_init(&attr);
+  const std::string verb = method ? method : "GET";
+  std::strncpy(attr.requestMethod, verb.c_str(), sizeof(attr.requestMethod) - 1);
+  attr.attributes = EMSCRIPTEN_FETCH_LOAD_TO_MEMORY |
+                    EMSCRIPTEN_FETCH_SYNCHRONOUS | EMSCRIPTEN_FETCH_REPLACE;
+  attr.timeoutMSecs = 60000;
+
+  std::vector<std::string> storage;
+  for (const auto &header : headers) {
+    storage.push_back(header.first);
+    storage.push_back(header.second);
+  }
+  if (!basicAuth.empty()) {
+    storage.push_back("Authorization");
+    storage.push_back("Basic " + base64Encode(basicAuth));
+  }
+  std::vector<const char *> pairs;
+  for (const auto &value : storage)
+    pairs.push_back(value.c_str());
+  pairs.push_back(nullptr);
+  attr.requestHeaders = pairs.data();
+  if (body) {
+    attr.requestData = body;
+    attr.requestDataSize = std::strlen(body);
+  }
+
+  // Firmware built for the web uses same-origin paths ("/api/..."). The
+  // runtime's workers are created from a blob: URL, so resolve against the
+  // page origin explicitly.
+  std::string target = url;
+  if (!target.empty() && target[0] == '/') {
+    static const std::string origin =
+        emscripten_run_script_string("self.location.origin");
+    target = origin + target;
+  }
+  emscripten_fetch_t *fetch = emscripten_fetch(&attr, target.c_str());
+  if (!fetch)
+    return false;
+  out.statusCode = fetch->status;
+  if (fetch->data && fetch->numBytes > 0)
+    out.body.assign(fetch->data, static_cast<size_t>(fetch->numBytes));
+  emscripten_fetch_close(fetch);
+  return out.statusCode > 0;
+}
+#else
 inline bool fetchWithCurl(const std::string &url, const char *method,
                           const std::map<std::string, std::string> &headers,
                           const std::string &basicAuth, const char *body,
@@ -228,6 +307,7 @@ inline bool fetchWithCurl(const std::string &url, const char *method,
   out.statusCode = std::atoi(statusText.c_str());
   return rc == 0 || out.statusCode > 0 || !out.body.empty();
 }
+#endif // __EMSCRIPTEN__
 
 inline bool fetch(const std::string &url, const char *method,
                   const std::map<std::string, std::string> &headers,
@@ -237,7 +317,11 @@ inline bool fetch(const std::string &url, const char *method,
     return true;
   if (fetchFromFileUrl(url, out))
     return true;
+#ifdef __EMSCRIPTEN__
+  return fetchWithBrowser(url, method, headers, basicAuth, body, out);
+#else
   return fetchWithCurl(url, method, headers, basicAuth, body, out);
+#endif
 }
 
 } // namespace sim_http_fetch
