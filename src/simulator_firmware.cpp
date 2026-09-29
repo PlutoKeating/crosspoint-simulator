@@ -4,7 +4,8 @@
 #include "network/OtaBootSwitch.h"
 
 namespace firmware_flash {
-Result flashFromSdPath(const char *, ProgressCb onProgress, void *ctx, bool) {
+Result flashFromSdPath(const char *, ProgressCb onProgress, void *ctx, bool,
+                       BeforeSwitchCb) {
   LOG_DBG("FLASH",
           "[SIM] Firmware flashing is not supported in the native simulator");
   if (onProgress)
@@ -65,3 +66,20 @@ bool switchTo(const esp_partition_t *) {
   return false;
 }
 } // namespace ota_boot
+
+// Trial boot needs NVS and real OTA slots; the simulator never installs
+// firmware, so every boot is an untracked (already trusted) image.
+#include "network/OtaTrial.h"
+
+namespace ota_trial {
+void onBoot() {}
+bool arm(const esp_partition_t *, const char *, const char *) {
+  return false;
+}
+bool active() { return false; }
+void noteApiResult(int, bool) {}
+void tick() {}
+void onCleanShutdown() {}
+Outcome pendingOutcome() { return {}; }
+void clearOutcome() {}
+} // namespace ota_trial
