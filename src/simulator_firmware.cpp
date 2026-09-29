@@ -52,10 +52,15 @@ const char *resultName(Result r) {
     return "UNSUPPORTED_IN_SIMULATOR";
   case Result::OTADATA_FAIL:
     return "OTADATA_FAIL";
+  case Result::VERIFY_FAIL:
+    return "VERIFY_FAIL";
+  case Result::BUSY:
+    return "BUSY";
   default:
     return "UNKNOWN";
   }
 }
+bool installInProgress() { return false; }
 } // namespace firmware_flash
 
 namespace ota_boot {
@@ -78,7 +83,8 @@ bool arm(const esp_partition_t *, const char *, const char *) {
 }
 bool active() { return false; }
 void noteApiResult(int, bool) {}
-void tick() {}
+void tick(bool) {}
+void disarm() {}
 void onCleanShutdown() {}
 Outcome pendingOutcome() { return {}; }
 void clearOutcome() {}
