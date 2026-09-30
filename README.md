@@ -28,6 +28,18 @@ sudo dnf install SDL2-devel openssl-devel
 sudo pacman -S sdl2 openssl
 ```
 
+## Host provisioning (StockStick)
+
+Before the firmware's `setup()`, `SimulatorLifecycle::applyProvisioning()` reads
+host values (web: `Module.simConfig[key]`; native: `CROSSPOINT_SIM_CONFIG_<KEY>`):
+
+- `device_id`: written to the simulated SD `/.crosspoint/project_stick.json` as a
+  bound identity without a device token, so the firmware shows content and makes
+  no device API calls.
+- `program`: base64 SSP1 program (natively also `program_path`, a raw file),
+  written to `/.crosspoint/studio/import.ssp`; the StockStick firmware installs it
+  at startup through the same path BLE delivery uses (the simulator has no radio).
+
 ## Integration
 
 Add the simulator to your firmware's platformio.ini as a `lib_dep` and configure the `[env:simulator]` environment. Use the sample file for your host OS:
@@ -240,7 +252,8 @@ quality, refresh behaviour, or memory pressure.
 ## StockStick single-screen programs
 
 `HalStorage::totalBytes()` and `usedBytes()` report capacity of the host filesystem
-containing `CROSSPOINT_SIM_SD`. Studio frame/program downloads use these methods
+containing `CROSSPOINT_SIM_SD`. Studio frame/program installs (BLE on the device, the
+provisioned `import.ssp` here) use these methods
 for the same capacity preflight as the device. They do not measure a physical SD
 card. Use a separate temporary SD root for tests; do not reuse personal book data.
 The firmware's BLE adapter is a no-op in native simulation. SDL screen and

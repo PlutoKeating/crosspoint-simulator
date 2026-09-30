@@ -4,6 +4,7 @@
 #include <sys/stat.h>
 
 #include <cctype>
+#include <cstdint>
 #include <fstream>
 #include <map>
 #include <mutex>
@@ -124,22 +125,81 @@ const char *config(const char *key) {
   return inserted->second.empty() ? nullptr : inserted->second.c_str();
 }
 
-void applyProvisionedIdentity() {
-  const char *id = config("device_id");
-  const char *token = config("device_token");
-  if (!id || !token)
-    return;
+namespace {
+
+// Uncached read of a (possibly megabyte-sized) provisioning value.
+std::string readConfigOnce(const char *key) {
+  std::string value;
+#ifdef __EMSCRIPTEN__
+  const int length = MAIN_THREAD_EM_ASM_INT(
+      {
+        var c = Module.simConfig;
+        var v = c && c[UTF8ToString($0)];
+        return typeof v === 'string' ? lengthBytesUTF8(v) : -1;
+      },
+      key);
+  if (length > 0) {
+    value.resize(static_cast<size_t>(length) + 1);
+    MAIN_THREAD_EM_ASM(
+        { stringToUTF8(Module.simConfig[UTF8ToString($0)], $1, $2); }, key,
+        &value[0], length + 1);
+    value.resize(static_cast<size_t>(length));
+  }
+#else
+  if (const char *v = config(key))
+    value = v;
+#endif
+  return value;
+}
+
+bool decodeBase64(const std::string &text, std::string &out) {
+  auto sextet = [](char c) -> int {
+    if (c >= 'A' && c <= 'Z') return c - 'A';
+    if (c >= 'a' && c <= 'z') return c - 'a' + 26;
+    if (c >= '0' && c <= '9') return c - '0' + 52;
+    if (c == '+' || c == '-') return 62;
+    if (c == '/' || c == '_') return 63;
+    return -1;
+  };
+  out.clear();
+  out.reserve(text.size() / 4 * 3);
+  uint32_t buffer = 0;
+  int bits = 0;
+  for (char c : text) {
+    if (c == '=' || c == '\n' || c == '\r') continue;
+    const int v = sextet(c);
+    if (v < 0) return false;
+    buffer = (buffer << 6) | static_cast<uint32_t>(v);
+    bits += 6;
+    if (bits >= 8) {
+      bits -= 8;
+      out.push_back(static_cast<char>((buffer >> bits) & 0xff));
+    }
+  }
+  return true;
+}
+
+std::string sdRoot() {
   const char *rootEnv = std::getenv("CROSSPOINT_SIM_SD");
   if (!rootEnv || !*rootEnv)
     rootEnv = std::getenv("CROSSPOINT_EMU_SD");
   std::string root = (rootEnv && *rootEnv) ? rootEnv : "./fs_";
   while (root.size() > 1 && root.back() == '/')
     root.pop_back();
-  const std::string dir = root + "/.crosspoint";
-  const std::string path = dir + "/project_stick.json";
-  ::mkdir(root.c_str(), 0777);
-  ::mkdir(dir.c_str(), 0777);
+  return root;
+}
 
+void writeAtomically(const std::string &path, const std::string &bytes) {
+  const std::string temp = path + ".tmp";
+  {
+    std::ofstream out(temp, std::ios::binary | std::ios::trunc);
+    out.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+  }
+  std::rename(temp.c_str(), path.c_str());
+}
+
+void provisionIdentity(const std::string &dir, const char *id) {
+  const std::string path = dir + "/project_stick.json";
   JsonDocument doc;
   {
     std::ifstream in(path);
@@ -157,15 +217,47 @@ void applyProvisionedIdentity() {
     doc.remove("pending_events");
   }
   doc["device_id"] = id;
-  doc["device_token"] = token;
   doc["bound"] = true;
-  doc.remove("pairing_code");
-  const std::string temp = path + ".tmp";
-  {
-    std::ofstream out(temp, std::ios::trunc);
-    serializeJson(doc, out);
+  // No credential: the demo device never calls the device API.
+  doc.remove("device_token");
+  std::string json;
+  serializeJson(doc, json);
+  writeAtomically(path, json);
+}
+
+void provisionProgram(const std::string &dir) {
+  std::string bytes;
+  const std::string encoded = readConfigOnce("program");
+  if (!encoded.empty()) {
+    if (!decodeBase64(encoded, bytes)) {
+      std::fputs("SimulatorLifecycle: invalid base64 program\n", stderr);
+      return;
+    }
+  } else if (const char *file = config("program_path")) {
+    std::ifstream in(file, std::ios::binary);
+    if (!in)
+      return;
+    std::stringstream text;
+    text << in.rdbuf();
+    bytes = text.str();
   }
-  std::rename(temp.c_str(), path.c_str());
+  if (bytes.size() < 8 || bytes.compare(0, 4, "SSP1") != 0)
+    return;
+  const std::string studio = dir + "/studio";
+  ::mkdir(studio.c_str(), 0777);
+  writeAtomically(studio + "/import.ssp", bytes);
+}
+
+} // namespace
+
+void applyProvisioning() {
+  const std::string root = sdRoot();
+  const std::string dir = root + "/.crosspoint";
+  ::mkdir(root.c_str(), 0777);
+  ::mkdir(dir.c_str(), 0777);
+  if (const char *id = config("device_id"))
+    provisionIdentity(dir, id);
+  provisionProgram(dir);
 }
 
 } // namespace SimulatorLifecycle

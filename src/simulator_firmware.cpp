@@ -78,7 +78,7 @@ bool switchTo(const esp_partition_t *) {
 
 namespace ota_trial {
 void onBoot() {}
-bool arm(const esp_partition_t *, const char *, const char *) {
+bool arm(const esp_partition_t *, const char *) {
   return false;
 }
 bool active() { return false; }
