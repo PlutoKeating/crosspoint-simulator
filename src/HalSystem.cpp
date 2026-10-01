@@ -6,3 +6,5 @@ void HalSystem::checkPanic() {}
 void HalSystem::clearPanic() {}
 std::string HalSystem::getPanicInfo(bool full) { return {}; }
 bool HalSystem::isRebootFromPanic() { return false; }
+void HalSystem::sampleHeap() {}
+void HalSystem::installOutOfMemoryHandler() {}
