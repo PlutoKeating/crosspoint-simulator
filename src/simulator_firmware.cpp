@@ -83,6 +83,7 @@ bool arm(const esp_partition_t *, const char *) {
 }
 bool active() { return false; }
 void noteApiResult(int, bool) {}
+void notePhoneSync() {}
 void tick(bool) {}
 void disarm() {}
 void onCleanShutdown() {}
