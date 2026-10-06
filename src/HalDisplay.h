@@ -57,6 +57,18 @@ public:
   uint8_t *lendFrameBufferStorage(uint32_t *sizeOut);
   void returnFrameBufferStorage();
 
+  // Firmware 2.7.4 framebuffer lifecycle and streamed frames (see the
+  // firmware's lib/hal/HalDisplay.h). Released, getFrameBuffer() returns
+  // nullptr like the device, so a stray framebuffer access shows up here.
+  void releaseFrameBuffer();
+  bool reallocFrameBuffer();
+  using StripFill = bool (*)(uint8_t *strip, uint16_t x0, uint16_t cols,
+                             void *ctx);
+  bool supportsStripDisplay() const;
+  bool displayStrips(StripFill fill, void *ctx, uint8_t *buffer,
+                     uint16_t stripCols,
+                     RefreshMode mode = RefreshMode::FAST_REFRESH);
+
   // Runtime geometry passthrough
   uint16_t getDisplayWidth() const;
   uint16_t getDisplayHeight() const;

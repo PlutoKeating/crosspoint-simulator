@@ -3,6 +3,7 @@
 #include <GfxRenderer.h>
 #include <SDL.h>
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <cstdlib>
@@ -50,6 +51,10 @@ constexpr uint8_t kGrayBlack = 0;
 GrayscalePreviewState grayscalePreviewState;
 std::array<uint8_t, HalDisplay::BUFFER_SIZE> frameBufferStorage{};
 bool frameBufferLent = false;
+bool frameBufferReleased = false;
+// What the controller would hold after a streamed refresh.
+std::array<uint8_t, HalDisplay::BUFFER_SIZE> streamedFrame{};
+std::array<uint8_t, HalDisplay::BUFFER_SIZE> streamedCheck{};
 
 struct ScreenshotEvent {
   unsigned long atMs;
@@ -377,6 +382,10 @@ void HalDisplay::displayWindow(int, int, int, int) {
 // pixels and flag for present.
 void HalDisplay::refreshDisplay(RefreshMode /*mode*/, bool /*turnOffScreen*/) {
   const uint8_t *fb = getFrameBuffer();
+  if (!fb) {
+    std::cerr << "[SIM] refresh without a framebuffer ignored" << std::endl;
+    return;
+  }
   snapshotBwBase(fb);
   renderBwPixels(fb);
 }
@@ -449,7 +458,7 @@ bool HalDisplay::shouldQuit() const { return quitRequested.load(); }
 void HalDisplay::deepSleep() { presentIfNeeded(); }
 
 uint8_t *HalDisplay::getFrameBuffer() const {
-  if (frameBufferLent) {
+  if (frameBufferLent || frameBufferReleased) {
     return nullptr;
   }
   return frameBufferStorage.data();
@@ -464,6 +473,58 @@ uint8_t *HalDisplay::lendFrameBufferStorage(uint32_t *sizeOut) {
   }
   frameBufferLent = true;
   return frameBufferStorage.data();
+}
+
+void HalDisplay::releaseFrameBuffer() { frameBufferReleased = true; }
+
+bool HalDisplay::reallocFrameBuffer() {
+  if (!frameBufferReleased)
+    return true;
+  frameBufferStorage.fill(0xFF);
+  frameBufferReleased = false;
+  return true;
+}
+
+bool HalDisplay::supportsStripDisplay() const { return true; }
+
+namespace {
+// One plane write: every strip of physical columns into `frame`, the way the
+// X3 driver addresses them through PTL windows.
+bool composeStrips(HalDisplay::StripFill fill, void *ctx, uint8_t *buffer,
+                   uint16_t stripCols,
+                   std::array<uint8_t, HalDisplay::BUFFER_SIZE> &frame) {
+  bool ok = true;
+  for (uint16_t x0 = 0; x0 < HalDisplay::DISPLAY_WIDTH; x0 += stripCols) {
+    const uint16_t cols =
+        std::min<uint16_t>(stripCols, HalDisplay::DISPLAY_WIDTH - x0);
+    const uint16_t bytes = cols / 8;
+    if (!fill(buffer, x0, cols, ctx)) {
+      memset(buffer, 0xFF, static_cast<size_t>(bytes) * HalDisplay::DISPLAY_HEIGHT);
+      ok = false;
+    }
+    for (uint16_t y = 0; y < HalDisplay::DISPLAY_HEIGHT; ++y)
+      memcpy(frame.data() + y * HalDisplay::DISPLAY_WIDTH_BYTES + x0 / 8,
+             buffer + y * bytes, bytes);
+  }
+  return ok;
+}
+} // namespace
+
+bool HalDisplay::displayStrips(StripFill fill, void *ctx, uint8_t *buffer,
+                               uint16_t stripCols, RefreshMode /*mode*/) {
+  if (!fill || !buffer || stripCols == 0 || (stripCols & 7) != 0)
+    return false;
+  // The device asks for every strip at least twice (DTM2 before the
+  // waveform, DTM1 after); a source that answers differently would leave the
+  // controller's baseline wrong, so check it here.
+  bool ok = composeStrips(fill, ctx, buffer, stripCols, streamedFrame);
+  ok = composeStrips(fill, ctx, buffer, stripCols, streamedCheck) && ok;
+  if (streamedFrame != streamedCheck)
+    std::cerr << "[SIM] displayStrips: strip source is not deterministic"
+              << std::endl;
+  snapshotBwBase(streamedFrame.data());
+  renderBwPixels(streamedFrame.data());
+  return ok;
 }
 
 void HalDisplay::returnFrameBufferStorage() {
