@@ -5,7 +5,7 @@
 
 namespace firmware_flash {
 Result flashFromSdPath(const char *, ProgressCb onProgress, void *ctx, bool,
-                       BeforeSwitchCb) {
+                       BeforeSwitchCb, size_t) {
   LOG_DBG("FLASH",
           "[SIM] Firmware flashing is not supported in the native simulator");
   if (onProgress)
@@ -13,7 +13,7 @@ Result flashFromSdPath(const char *, ProgressCb onProgress, void *ctx, bool,
   return Result::WRITE_FAIL;
 }
 
-Result validateImageFile(const char *, size_t) {
+Result validateImageFile(const char *, size_t, size_t) {
   LOG_DBG(
       "FLASH",
       "[SIM] Firmware image validation is disabled in the native simulator");

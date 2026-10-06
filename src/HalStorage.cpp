@@ -101,6 +101,11 @@ uint64_t HalStorage::usedBytes() const {
   return uint64_t(capacity.f_blocks - capacity.f_bavail) * capacity.f_frsize;
 }
 
+namespace {
+SimIoStats ioStats;
+}
+SimIoStats simIoStats() { return ioStats; }
+
 class HalFile::Impl {
 public:
   int fd = -1;
@@ -113,6 +118,8 @@ public:
     // oflag_t, so all O_* constants are already native POSIX values — pass them
     // straight through.
     fd = ::open(path.c_str(), flags, 0666);
+    if (fd >= 0)
+      ++ioStats.opens;
     if (fd < 0) {
       fprintf(stderr, "[SIM] open failed: %s (flags=0x%x errno=%d %s)\n",
               path.c_str(), flags, errno, strerror(errno));
@@ -180,11 +187,13 @@ size_t HalFile::size() {
 size_t HalFile::fileSize() { return size(); }
 uint64_t HalFile::fileSize64() { return size(); }
 bool HalFile::seek(size_t pos) {
+  ++ioStats.seeks;
   if (!impl || impl->fd < 0)
     return false;
   return lseek(impl->fd, (off_t)pos, SEEK_SET) >= 0;
 }
 bool HalFile::seek64(uint64_t pos) {
+  ++ioStats.seeks;
   if (!impl || impl->fd < 0)
     return false;
   if (pos > static_cast<uint64_t>(std::numeric_limits<off_t>::max()))
@@ -197,6 +206,7 @@ bool HalFile::seekCur(int64_t offset) {
   return lseek(impl->fd, (off_t)offset, SEEK_CUR) >= 0;
 }
 bool HalFile::seekSet(size_t offset) {
+  ++ioStats.seeks;
   if (!impl || impl->fd < 0)
     return false;
   return lseek(impl->fd, (off_t)offset, SEEK_SET) >= 0;
@@ -219,6 +229,9 @@ int HalFile::read(void *buf, size_t count) {
   if (!impl || impl->fd < 0)
     return -1;
   ssize_t n = ::read(impl->fd, buf, count);
+  ++ioStats.reads;
+  if (n > 0)
+    ioStats.readBytes += n;
   return (int)n;
 }
 int HalFile::read() {
@@ -230,7 +243,14 @@ int HalFile::read() {
 size_t HalFile::write(const void *buf, size_t count) {
   if (!impl || impl->fd < 0)
     return 0;
+  const off_t at = lseek(impl->fd, 0, SEEK_CUR);
   ssize_t n = ::write(impl->fd, buf, count);
+  ++ioStats.writes;
+  if (n > 0) {
+    ioStats.writeBytes += n;
+    // 512-byte sectors this write touches (a partial one costs a whole sector).
+    ioStats.writeSectors += (at + n + 511) / 512 - at / 512;
+  }
   return n < 0 ? 0 : (size_t)n;
 }
 size_t HalFile::write(const uint8_t *buf, size_t count) {
@@ -253,6 +273,7 @@ bool HalFile::rename(const char *newPath) {
   ensureParentDirectories(resolved);
   return ::rename(impl->path.c_str(), resolved.c_str()) == 0;
 }
+bool HalFile::isContiguous() { return impl && impl->fd >= 0; }
 bool HalFile::isDirectory() const { return impl && impl->isDir(); }
 void HalFile::rewindDirectory() {
   if (impl && impl->dir)
@@ -350,7 +371,23 @@ bool HalStorage::remove(const char *path) {
   if (full.empty()) {
     return false;
   }
+  ++ioStats.removes;
   return ::remove(full.c_str()) == 0;
+}
+bool HalStorage::createContiguous(const char *path, uint64_t size) {
+  std::string full = resolveStoragePath(path);
+  if (full.empty())
+    return false;
+  ensureParentDirectories(full);
+  const int fd = ::open(full.c_str(), O_RDWR | O_CREAT | O_EXCL, 0666);
+  if (fd < 0)
+    return false;
+  const bool ok = ftruncate(fd, static_cast<off_t>(size)) == 0;
+  ::close(fd);
+  ++ioStats.creates;
+  if (!ok)
+    ::remove(full.c_str());
+  return ok;
 }
 bool HalStorage::rename(const char *oldPath, const char *newPath) {
   std::string o = resolveStoragePath(oldPath);
@@ -359,6 +396,7 @@ bool HalStorage::rename(const char *oldPath, const char *newPath) {
     return false;
   }
   ensureParentDirectories(n);
+  ++ioStats.renames;
   return ::rename(o.c_str(), n.c_str()) == 0;
 }
 static bool removeDirRecursive(const std::string &full) {
@@ -468,6 +506,7 @@ bool HalStorage::openFileForWrite(const char *moduleName, const String &path,
 }
 
 std::vector<String> HalStorage::listFiles(const char *path, int maxFiles) {
+  ++ioStats.lists;
   std::vector<String> result;
   std::string full = resolveStoragePath(path);
   if (full.empty()) {

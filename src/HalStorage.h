@@ -46,6 +46,9 @@ public:
   bool remove(const char *path);
   bool rename(const char *oldPath, const char *newPath);
   bool rmdir(const char *path);
+  // Firmware 2.7.10 transfer areas: a file of `size` bytes created once
+  // (contiguous on the device; sparse here). False if `path` exists.
+  bool createContiguous(const char *path, uint64_t size);
 
   bool openFileForRead(const char *moduleName, const char *path, HalFile &file);
   bool openFileForRead(const char *moduleName, const std::string &path,
@@ -105,6 +108,7 @@ public:
   size_t write(uint8_t b) override;
   bool sync();
   bool rename(const char *newPath);
+  bool isContiguous();
   bool isDirectory() const;
   void rewindDirectory();
   bool close();
@@ -112,6 +116,15 @@ public:
   bool isOpen() const;
   operator bool() const;
 };
+
+// Simulator-only SD operation counters (HalFile/HalStorage calls and bytes),
+// for comparing how much card work a firmware path does.
+struct SimIoStats {
+  unsigned long opens = 0, reads = 0, writes = 0, seeks = 0, renames = 0,
+                removes = 0, creates = 0, lists = 0;
+  unsigned long long readBytes = 0, writeBytes = 0, writeSectors = 0;
+};
+SimIoStats simIoStats();
 
 // Only do renaming FsFile to HalFile if this header is included by downstream
 // code The renaming is to allow using the thread-safe HalFile instead of the
